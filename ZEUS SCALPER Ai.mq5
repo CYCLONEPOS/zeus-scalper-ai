@@ -5,7 +5,7 @@
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2026, CYCLONE POSH"
 #property link      "https://www.mql5.com"
-#property version   "1.00"
+#property version   "1.01"
 //+------------------------------------------------------------------+
 //| Include                                                          |
 //+------------------------------------------------------------------+
@@ -26,33 +26,38 @@
 input string             Expert_Title                 ="ZEUS SCALPER Ai"; // Document name
 ulong                    Expert_MagicNumber           =53927483;          //
 bool                     Expert_EveryTick             =false;             //
-//--- inputs for main signal
-input int                Signal_ThresholdOpen         =10;                // Signal threshold value to open [0...100]
-input int                Signal_ThresholdClose        =10;                // Signal threshold value to close [0...100]
+//--- inputs for main signal - IMPROVED THRESHOLDS
+input int                Signal_ThresholdOpen         =35;                // Signal threshold value to open [0...100] - INCREASED for quality
+input int                Signal_ThresholdClose        =20;                // Signal threshold value to close [0...100]
 input double             Signal_PriceLevel            =0.0;               // Price level to execute a deal
 input double             Signal_StopLevel             =2550.0;              // Stop Loss level (in points)
 input double             Signal_TakeLevel             =3550.0;              // Take Profit level (in points)
 input int                Signal_Expiration            =4;                 // Expiration of pending orders (in bars)
+//--- MA Filter 1 (Trend Direction - 200 EMA)
 input int                Signal_0_MA_PeriodMA         =200;               // Moving Average(200,0,...) Period of averaging
 input int                Signal_0_MA_Shift            =0;                 // Moving Average(200,0,...) Time shift
 input ENUM_MA_METHOD     Signal_0_MA_Method           =MODE_EMA;          // Moving Average(200,0,...) Method of averaging
 input ENUM_APPLIED_PRICE Signal_0_MA_Applied          =PRICE_CLOSE;       // Moving Average(200,0,...) Prices series
-input double             Signal_0_MA_Weight           =0.3;               // Moving Average(200,0,...) Weight [0...1.0]
+input double             Signal_0_MA_Weight           =0.25;              // Moving Average(200,0,...) Weight [0...1.0] - ADJUSTED
+//--- MA Filter 2 (Entry Confirmation - 50 EMA)
 input int                Signal_1_MA_PeriodMA         =50;                // Moving Average(50,0,...) Period of averaging
 input int                Signal_1_MA_Shift            =0;                 // Moving Average(50,0,...) Time shift
 input ENUM_MA_METHOD     Signal_1_MA_Method           =MODE_EMA;          // Moving Average(50,0,...) Method of averaging
 input ENUM_APPLIED_PRICE Signal_1_MA_Applied          =PRICE_CLOSE;       // Moving Average(50,0,...) Prices series
-input double             Signal_1_MA_Weight           =0.2;               // Moving Average(50,0,...) Weight [0...1.0]
+input double             Signal_1_MA_Weight           =0.30;              // Moving Average(50,0,...) Weight [0...1.0] - INCREASED for entry confirmation
+//--- Bulls Power (Uptrend Momentum)
 input int                Signal_BullsPower_PeriodBulls=13;                // Bulls Power(13) Period of calculation
-input double             Signal_BullsPower_Weight     =0.2;               // Bulls Power(13) Weight [0...1.0]
+input double             Signal_BullsPower_Weight     =0.15;              // Bulls Power(13) Weight [0...1.0] - REDUCED to avoid conflicts
+//--- Bears Power (Downtrend Momentum)
 input int                Signal_BearsPower_PeriodBears=13;                // Bears Power(13) Period of calculation
-input double             Signal_BearsPower_Weight     =0.2;               // Bears Power(13) Weight [0...1.0]
+input double             Signal_BearsPower_Weight     =0.15;              // Bears Power(13) Weight [0...1.0] - REDUCED to avoid conflicts
+//--- Stochastic (Confirmation of Momentum)
 input int                Signal_Stoch_PeriodK         =14;                // Stochastic(14,3,3,...) K-period
 input int                Signal_Stoch_PeriodD         =3;                 // Stochastic(14,3,3,...) D-period
 input int                Signal_Stoch_PeriodSlow      =3;                 // Stochastic(14,3,3,...) Period of slowing
 input ENUM_STO_PRICE     Signal_Stoch_Applied         =STO_LOWHIGH;       // Stochastic(14,3,3,...) Prices to apply to
-input double             Signal_Stoch_Weight          =0.5;               // Stochastic(14,3,3,...) Weight [0...1.0]
-//--- inputs for money
+input double             Signal_Stoch_Weight          =0.15;              // Stochastic(14,3,3,...) Weight [0...1.0] - REDUCED, now confirmation only
+//--- money
 input double             Money_FixLot_Percent         =10.0;              // Percent
 input double             Money_FixLot_Lots            =0.1;               // Fixed volume
 //+------------------------------------------------------------------+
@@ -97,8 +102,8 @@ int OnInit() {
    signal.StopLevel(Signal_StopLevel);
    signal.TakeLevel(Signal_TakeLevel);
    signal.Expiration(Signal_Expiration);
-   signal.Comment(GetTradeComment());  // Set trade comment
-//--- Creating filter CSignalMA
+   signal.Comment(GetTradeComment());
+//--- Creating filter CSignalMA (Trend Filter - 200 EMA)
    CSignalMA *filter0=new CSignalMA;
    if(filter0==NULL) {
       //--- failed
@@ -113,7 +118,7 @@ int OnInit() {
    filter0.Method(Signal_0_MA_Method);
    filter0.Applied(Signal_0_MA_Applied);
    filter0.Weight(Signal_0_MA_Weight);
-//--- Creating filter CSignalMA
+//--- Creating filter CSignalMA (Entry Confirmation - 50 EMA)
    CSignalMA *filter1=new CSignalMA;
    if(filter1==NULL) {
       //--- failed
