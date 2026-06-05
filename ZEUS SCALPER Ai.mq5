@@ -6,6 +6,7 @@
 #property copyright "Copyright 2026, CYCLONE POSH"
 #property link      "https://www.mql5.com"
 #property version   "1.03"
+#property description "ZEUS SCALPER Ai - Advanced Scalping EA with Multi-Indicator Analysis"
 //+------------------------------------------------------------------+
 //| Include                                                          |
 //+------------------------------------------------------------------+
@@ -21,6 +22,10 @@
 #include <Expert\Money\MoneyFixedLot.mqh>
 //--- Trade class
 #include <Trade\Trade.mqh>
+//+------------------------------------------------------------------+
+//| Custom Trade Comment Settings                                    |
+//+------------------------------------------------------------------+
+#define TRADE_COMMENT "ZEUS SCALPER Ai"  // Custom trade comment
 //+------------------------------------------------------------------+
 //| Inputs                                                           |
 //+------------------------------------------------------------------+
@@ -77,12 +82,10 @@ int winningTrades = 0;
 double totalProfit = 0.0;
 datetime lastTradeTime = 0;
 //+------------------------------------------------------------------+
-//| Function to generate trade comment                               |
+//| Function to get custom trade comment                             |
 //+------------------------------------------------------------------+
 string GetTradeComment() {
-   string comment = "";
-   comment = "ZEUS SCALPER Ai";
-   return comment;
+   return TRADE_COMMENT;
 }
 //+------------------------------------------------------------------+
 //| Function to update trading statistics                            |
@@ -157,6 +160,7 @@ void DrawDashboard() {
    dashboardText += "║ Win Rate: " + DoubleToString(winRate, 1) + "%\n";
    dashboardText += "║ Total P&L: " + DoubleToString(totalProfit, 2) + " $\n";
    dashboardText += "╠════════════════════════════════════╣\n";
+   dashboardText += "║ Trade Comment: " + TRADE_COMMENT + "\n";
    dashboardText += "║ STATUS: " + (PositionsTotal() > 0 ? "IN TRADE" : "WAITING") + "\n";
    dashboardText += "╚════════════════════════════════════╝\n";
    
@@ -306,6 +310,9 @@ int OnInit() {
       ExtExpert.Deinit();
       return(INIT_FAILED);
    }
+//--- Print initialization info
+   printf("ZEUS SCALPER Ai initialized - Trade Comment: %s", GetTradeComment());
+   
 //--- ok
    return(INIT_SUCCEEDED);
 }
@@ -315,6 +322,7 @@ int OnInit() {
 void OnDeinit(const int reason) {
    ExtExpert.Deinit();
    Comment("");
+   printf("ZEUS SCALPER Ai deinitialized");
 }
 //+------------------------------------------------------------------+
 //| "Tick" event handler function                                    |
