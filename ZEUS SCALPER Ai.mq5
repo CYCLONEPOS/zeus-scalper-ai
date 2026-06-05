@@ -5,7 +5,7 @@
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2026, CYCLONE POSH"
 #property link      "https://www.mql5.com"
-#property version   "1.01"
+#property version   "1.02"
 //+------------------------------------------------------------------+
 //| Include                                                          |
 //+------------------------------------------------------------------+
@@ -64,24 +64,27 @@ input double             Money_FixLot_Lots            =0.1;               // Fix
 //| Global expert object                                             |
 //+------------------------------------------------------------------+
 CExpert ExtExpert;
-string TradeComment = "";  // Global trade comment
 //+------------------------------------------------------------------+
 //| Function to generate trade comment                               |
 //+------------------------------------------------------------------+
-void GenerateTradeComment() {
-   TradeComment = "";
-   TradeComment += "ZEUS SCALPER Ai | ";
-   TradeComment += "SL:" + DoubleToString(Signal_StopLevel, 0) + "pts | ";
-   TradeComment += "TP:" + DoubleToString(Signal_TakeLevel, 0) + "pts | ";
-   TradeComment += "Magic:" + IntegerToString(Expert_MagicNumber);
+string GetTradeComment() {
+   string comment = "";
+   comment = "ZEUS SCALPER Ai";
+   return comment;
+}
+//+------------------------------------------------------------------+
+//| Function to set trade comment on orders                          |
+//+------------------------------------------------------------------+
+void SetOrderComment() {
+   CTrade trade;
+   trade.SetExpertMagicNumber(Expert_MagicNumber);
+   trade.SetTypeFillingBySymbol(Symbol());
+   trade.SetDeviationInPoints(10);
 }
 //+------------------------------------------------------------------+
 //| Initialization function of the expert                            |
 //+------------------------------------------------------------------+
 int OnInit() {
-//--- Generate trade comment at initialization
-   GenerateTradeComment();
-   
 //--- Initializing expert
    if(!ExtExpert.Init(Symbol(),Period(),Expert_EveryTick,Expert_MagicNumber)) {
       //--- failed
