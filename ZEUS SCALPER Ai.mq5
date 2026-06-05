@@ -64,21 +64,24 @@ input double             Money_FixLot_Lots            =0.1;               // Fix
 //| Global expert object                                             |
 //+------------------------------------------------------------------+
 CExpert ExtExpert;
+string TradeComment = "";  // Global trade comment
 //+------------------------------------------------------------------+
 //| Function to generate trade comment                               |
 //+------------------------------------------------------------------+
-string GetTradeComment() {
-   string comment = "";
-   comment += "ZEUS SCALPER Ai | ";
-   comment += "SL:" + DoubleToString(Signal_StopLevel, 0) + "pts | ";
-   comment += "TP:" + DoubleToString(Signal_TakeLevel, 0) + "pts | ";
-   comment += "Magic:" + IntegerToString(Expert_MagicNumber);
-   return comment;
+void GenerateTradeComment() {
+   TradeComment = "";
+   TradeComment += "ZEUS SCALPER Ai | ";
+   TradeComment += "SL:" + DoubleToString(Signal_StopLevel, 0) + "pts | ";
+   TradeComment += "TP:" + DoubleToString(Signal_TakeLevel, 0) + "pts | ";
+   TradeComment += "Magic:" + IntegerToString(Expert_MagicNumber);
 }
 //+------------------------------------------------------------------+
 //| Initialization function of the expert                            |
 //+------------------------------------------------------------------+
 int OnInit() {
+//--- Generate trade comment at initialization
+   GenerateTradeComment();
+   
 //--- Initializing expert
    if(!ExtExpert.Init(Symbol(),Period(),Expert_EveryTick,Expert_MagicNumber)) {
       //--- failed
@@ -102,7 +105,6 @@ int OnInit() {
    signal.StopLevel(Signal_StopLevel);
    signal.TakeLevel(Signal_TakeLevel);
    signal.Expiration(Signal_Expiration);
-   signal.Comment(GetTradeComment());
 //--- Creating filter CSignalMA (Trend Filter - 200 EMA)
    CSignalMA *filter0=new CSignalMA;
    if(filter0==NULL) {
