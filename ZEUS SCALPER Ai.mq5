@@ -5,7 +5,7 @@
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2026, CYCLONE POSH"
 #property link      "https://www.mql5.com"
-#property version   "1.02"
+#property version   "1.03"
 //+------------------------------------------------------------------+
 //| Include                                                          |
 //+------------------------------------------------------------------+
@@ -26,9 +26,15 @@
 input string             Expert_Title                 ="ZEUS SCALPER Ai"; // Document name
 ulong                    Expert_MagicNumber           =53927483;          //
 bool                     Expert_EveryTick             =false;             //
+//--- inputs for dashboard
+input bool               ShowDashboard                =true;              // Show trading dashboard
+input color              DashboardColor               =clrWhite;          // Dashboard text color
+input int                DashboardX                   =10;                // Dashboard X position
+input int                DashboardY                   =20;                // Dashboard Y position
+input int                DashboardFontSize            =10;                // Dashboard font size
 //--- inputs for main signal - IMPROVED THRESHOLDS
-input int                Signal_ThresholdOpen         =35;                // Signal threshold value to open [0...100] - INCREASED for quality
-input int                Signal_ThresholdClose        =20;                // Signal threshold value to close [0...100]
+input int                Signal_ThresholdOpen         =40;                // Signal threshold value to open [0...100] - INCREASED for quality
+input int                Signal_ThresholdClose        =25;                // Signal threshold value to close [0...100]
 input double             Signal_PriceLevel            =0.0;               // Price level to execute a deal
 input double             Signal_StopLevel             =2550.0;              // Stop Loss level (in points)
 input double             Signal_TakeLevel             =3550.0;              // Take Profit level (in points)
@@ -38,25 +44,25 @@ input int                Signal_0_MA_PeriodMA         =200;               // Mov
 input int                Signal_0_MA_Shift            =0;                 // Moving Average(200,0,...) Time shift
 input ENUM_MA_METHOD     Signal_0_MA_Method           =MODE_EMA;          // Moving Average(200,0,...) Method of averaging
 input ENUM_APPLIED_PRICE Signal_0_MA_Applied          =PRICE_CLOSE;       // Moving Average(200,0,...) Prices series
-input double             Signal_0_MA_Weight           =0.25;              // Moving Average(200,0,...) Weight [0...1.0] - ADJUSTED
+input double             Signal_0_MA_Weight           =0.28;              // Moving Average(200,0,...) Weight [0...1.0] - ADJUSTED
 //--- MA Filter 2 (Entry Confirmation - 50 EMA)
 input int                Signal_1_MA_PeriodMA         =50;                // Moving Average(50,0,...) Period of averaging
 input int                Signal_1_MA_Shift            =0;                 // Moving Average(50,0,...) Time shift
 input ENUM_MA_METHOD     Signal_1_MA_Method           =MODE_EMA;          // Moving Average(50,0,...) Method of averaging
 input ENUM_APPLIED_PRICE Signal_1_MA_Applied          =PRICE_CLOSE;       // Moving Average(50,0,...) Prices series
-input double             Signal_1_MA_Weight           =0.30;              // Moving Average(50,0,...) Weight [0...1.0] - INCREASED for entry confirmation
+input double             Signal_1_MA_Weight           =0.32;              // Moving Average(50,0,...) Weight [0...1.0] - INCREASED for entry confirmation
 //--- Bulls Power (Uptrend Momentum)
 input int                Signal_BullsPower_PeriodBulls=13;                // Bulls Power(13) Period of calculation
-input double             Signal_BullsPower_Weight     =0.15;              // Bulls Power(13) Weight [0...1.0] - REDUCED to avoid conflicts
+input double             Signal_BullsPower_Weight     =0.20;              // Bulls Power(13) Weight [0...1.0] - INCREASED
 //--- Bears Power (Downtrend Momentum)
 input int                Signal_BearsPower_PeriodBears=13;                // Bears Power(13) Period of calculation
-input double             Signal_BearsPower_Weight     =0.15;              // Bears Power(13) Weight [0...1.0] - REDUCED to avoid conflicts
+input double             Signal_BearsPower_Weight     =0.20;              // Bears Power(13) Weight [0...1.0] - INCREASED
 //--- Stochastic (Confirmation of Momentum)
 input int                Signal_Stoch_PeriodK         =14;                // Stochastic(14,3,3,...) K-period
 input int                Signal_Stoch_PeriodD         =3;                 // Stochastic(14,3,3,...) D-period
 input int                Signal_Stoch_PeriodSlow      =3;                 // Stochastic(14,3,3,...) Period of slowing
 input ENUM_STO_PRICE     Signal_Stoch_Applied         =STO_LOWHIGH;       // Stochastic(14,3,3,...) Prices to apply to
-input double             Signal_Stoch_Weight          =0.15;              // Stochastic(14,3,3,...) Weight [0...1.0] - REDUCED, now confirmation only
+input double             Signal_Stoch_Weight          =0.20;              // Stochastic(14,3,3,...) Weight [0...1.0] - INCREASED
 //--- money
 input double             Money_FixLot_Percent         =10.0;              // Percent
 input double             Money_FixLot_Lots            =0.1;               // Fixed volume
@@ -64,6 +70,10 @@ input double             Money_FixLot_Lots            =0.1;               // Fix
 //| Global expert object                                             |
 //+------------------------------------------------------------------+
 CExpert ExtExpert;
+int totalTrades = 0;
+int winningTrades = 0;
+double totalProfit = 0.0;
+datetime lastTradeTime = 0;
 //+------------------------------------------------------------------+
 //| Function to generate trade comment                               |
 //+------------------------------------------------------------------+
@@ -73,13 +83,72 @@ string GetTradeComment() {
    return comment;
 }
 //+------------------------------------------------------------------+
-//| Function to set trade comment on orders                          |
+//| Function to update trading statistics                            |
 //+------------------------------------------------------------------+
-void SetOrderComment() {
-   CTrade trade;
-   trade.SetExpertMagicNumber(Expert_MagicNumber);
-   trade.SetTypeFillingBySymbol(Symbol());
-   trade.SetDeviationInPoints(10);
+void UpdateTradingStats() {
+   int ordersTotal = OrdersTotal();
+   int positionsTotal = PositionsTotal();
+   
+   totalTrades = 0;
+   winningTrades = 0;
+   totalProfit = 0.0;
+   
+   for(int i = OrdersHistoryTotal() - 1; i >= 0; i--) {
+      if(OrderGetTicket(i) > 0) {
+         if(OrderGetInteger(ORDER_MAGIC) == Expert_MagicNumber) {
+            if(OrderGetInteger(ORDER_STATE) == ORDER_STATE_FILLED) {
+               totalTrades++;
+               double profit = OrderGetDouble(ORDER_PROFIT);
+               totalProfit += profit;
+               if(profit > 0) winningTrades++;
+            }
+         }
+      }
+   }
+}
+//+------------------------------------------------------------------+
+//| Function to draw text dashboard                                  |
+//+------------------------------------------------------------------+
+void DrawDashboard() {
+   if(!ShowDashboard) return;
+   
+   UpdateTradingStats();
+   
+   string dashboardText = "";
+   dashboardText += "╔════════════════════════════════════╗\n";
+   dashboardText += "║    ZEUS SCALPER Ai - DASHBOARD    ║\n";
+   dashboardText += "╠════════════════════════════════════╣\n";
+   dashboardText += "║ Symbol: " + Symbol() + "\n";
+   dashboardText += "║ Timeframe: " + IntegerToString(Period()) + " min\n";
+   dashboardText += "║ Price: " + DoubleToString(SymbolInfoDouble(Symbol(), SYMBOL_ASK), 5) + "\n";
+   dashboardText += "╠════════════════════════════════════╣\n";
+   dashboardText += "║ SIGNAL SETTINGS\n";
+   dashboardText += "║ Open Threshold: " + IntegerToString(Signal_ThresholdOpen) + "%\n";
+   dashboardText += "║ Close Threshold: " + IntegerToString(Signal_ThresholdClose) + "%\n";
+   dashboardText += "║ Stop Loss: " + DoubleToString(Signal_StopLevel, 0) + " pts\n";
+   dashboardText += "║ Take Profit: " + DoubleToString(Signal_TakeLevel, 0) + " pts\n";
+   dashboardText += "╠════════════════════════════════════╣\n";
+   dashboardText += "║ INDICATOR WEIGHTS\n";
+   dashboardText += "║ MA(200): " + DoubleToString(Signal_0_MA_Weight, 2) + " | ";
+   dashboardText += "MA(50): " + DoubleToString(Signal_1_MA_Weight, 2) + "\n";
+   dashboardText += "║ Bulls: " + DoubleToString(Signal_BullsPower_Weight, 2) + " | ";
+   dashboardText += "Bears: " + DoubleToString(Signal_BearsPower_Weight, 2) + "\n";
+   dashboardText += "║ Stoch: " + DoubleToString(Signal_Stoch_Weight, 2) + "\n";
+   dashboardText += "╠════════════════════════════════════╣\n";
+   dashboardText += "║ TRADING STATISTICS\n";
+   dashboardText += "║ Total Trades: " + IntegerToString(totalTrades) + "\n";
+   dashboardText += "║ Winning: " + IntegerToString(winningTrades) + " | ";
+   dashboardText += "Losing: " + IntegerToString(totalTrades - winningTrades) + "\n";
+   
+   double winRate = (totalTrades > 0) ? (double)winningTrades / totalTrades * 100 : 0;
+   dashboardText += "║ Win Rate: " + DoubleToString(winRate, 1) + "%\n";
+   dashboardText += "║ Total P&L: " + DoubleToString(totalProfit, 2) + " $\n";
+   dashboardText += "╠════════════════════════════════════╣\n";
+   dashboardText += "║ STATUS: " + (PositionsTotal() > 0 ? "IN TRADE" : "WAITING") + "\n";
+   dashboardText += "╚════════════════════════════════════╝\n";
+   
+   // Draw the dashboard using Comment function
+   Comment(dashboardText);
 }
 //+------------------------------------------------------------------+
 //| Initialization function of the expert                            |
@@ -232,18 +301,21 @@ int OnInit() {
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason) {
    ExtExpert.Deinit();
+   Comment("");
 }
 //+------------------------------------------------------------------+
 //| "Tick" event handler function                                    |
 //+------------------------------------------------------------------+
 void OnTick() {
    ExtExpert.OnTick();
+   DrawDashboard();
 }
 //+------------------------------------------------------------------+
 //| "Trade" event handler function                                    |
 //+------------------------------------------------------------------+
 void OnTrade() {
    ExtExpert.OnTrade();
+   UpdateTradingStats();
 }
 //+------------------------------------------------------------------+
 //| "Timer" event handler function                                    |
