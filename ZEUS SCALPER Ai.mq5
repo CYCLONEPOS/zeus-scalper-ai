@@ -5,7 +5,7 @@
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2026, CYCLONE POSH"
 #property link      "https://www.mql5.com"
-#property version   "1.03"
+#property version   "1.04"
 #property description "ZEUS SCALPER Ai - Advanced Scalping EA with Multi-Indicator Analysis"
 //+------------------------------------------------------------------+
 //| Include                                                          |
@@ -73,14 +73,19 @@ input double             Signal_Stoch_Weight          =0.20;              // Sto
 //--- money
 input double             Money_FixLot_Percent         =10.0;              // Percent
 input double             Money_FixLot_Lots            =0.1;               // Fixed volume
+//--- Debugging
+input bool               EnableDebugLog               =true;              // Enable debug logging
 //+------------------------------------------------------------------+
-//| Global expert object                                             |
+//| Global expert object & trade object                              |
 //+------------------------------------------------------------------+
 CExpert ExtExpert;
+CTrade trade;
 int totalTrades = 0;
 int winningTrades = 0;
 double totalProfit = 0.0;
 datetime lastTradeTime = 0;
+double lastSignalStrength = 0.0;
+int lastSignalDirection = 0; // 1=BUY, -1=SELL, 0=NONE
 //+------------------------------------------------------------------+
 //| Function to get custom trade comment                             |
 //+------------------------------------------------------------------+
@@ -123,6 +128,70 @@ void UpdateTradingStats() {
    }
 }
 //+------------------------------------------------------------------+
+//| Function to execute trades based on signals                      |
+//+------------------------------------------------------------------+
+void CheckAndExecuteTrades() {
+   // Get current signal strength from Expert
+   double signalStrength = ExtExpert.Signal();
+   lastSignalStrength = signalStrength;
+   
+   // Check if we already have an open position
+   if(PositionsTotal() > 0) {
+      return; // Only one trade at a time
+   }
+   
+   // Get signal direction
+   int signalType = ExtExpert.SignalOpen();
+   lastSignalDirection = signalType;
+   
+   // Log signal strength
+   if(EnableDebugLog) {
+      printf("Signal Strength: %.2f | Signal Type: %d | Threshold: %d", 
+             signalStrength, signalType, Signal_ThresholdOpen);
+   }
+   
+   // Check for BUY signal
+   if(signalType == ORDER_TYPE_BUY && signalStrength >= Signal_ThresholdOpen) {
+      double sl = Ask() - Signal_StopLevel * Point();
+      double tp = Ask() + Signal_TakeLevel * Point();
+      
+      if(trade.Buy(Money_FixLot_Lots, Symbol(), Ask(), sl, tp, GetTradeComment())) {
+         printf("✓ BUY TRADE OPENED | Signal: %.2f | SL: %.5f | TP: %.5f", 
+                signalStrength, sl, tp);
+         totalTrades++;
+         lastTradeTime = TimeCurrent();
+      } else {
+         printf("✗ BUY TRADE FAILED | Error: %d", trade.ResultRetcode());
+      }
+   }
+   
+   // Check for SELL signal
+   if(signalType == ORDER_TYPE_SELL && signalStrength >= Signal_ThresholdOpen) {
+      double sl = Bid() + Signal_StopLevel * Point();
+      double tp = Bid() - Signal_TakeLevel * Point();
+      
+      if(trade.Sell(Money_FixLot_Lots, Symbol(), Bid(), sl, tp, GetTradeComment())) {
+         printf("✓ SELL TRADE OPENED | Signal: %.2f | SL: %.5f | TP: %.5f", 
+                signalStrength, sl, tp);
+         totalTrades++;
+         lastTradeTime = TimeCurrent();
+      } else {
+         printf("✗ SELL TRADE FAILED | Error: %d", trade.ResultRetcode());
+      }
+   }
+}
+//+------------------------------------------------------------------+
+//| Function to log signal strength                                  |
+//+------------------------------------------------------------------+
+void LogSignalStrength() {
+   double signalOpen = ExtExpert.Signal();
+   
+   if(EnableDebugLog) {
+      printf("[%s] Signal: %.2f | Open Threshold: %d | Positions: %d", 
+             Symbol(), signalOpen, Signal_ThresholdOpen, PositionsTotal());
+   }
+}
+//+------------------------------------------------------------------+
 //| Function to draw text dashboard                                  |
 //+------------------------------------------------------------------+
 void DrawDashboard() {
@@ -134,9 +203,9 @@ void DrawDashboard() {
    dashboardText += "╔════════════════════════════════════╗\n";
    dashboardText += "║    ZEUS SCALPER Ai - DASHBOARD    ║\n";
    dashboardText += "╠════════════════════════════════════╣\n";
-   dashboardText += "║ Symbol: " + Symbol() + "\n";
+   dashboardText += "║ Symbol: " + Symbol() + " | Spread: " + IntegerToString(GetSpread()) + "\n";
    dashboardText += "║ Timeframe: " + IntegerToString(Period()) + " min\n";
-   dashboardText += "║ Price: " + DoubleToString(SymbolInfoDouble(Symbol(), SYMBOL_ASK), 5) + "\n";
+   dashboardText += "║ Price: " + DoubleToString(Ask(), 5) + " | Bid: " + DoubleToString(Bid(), 5) + "\n";
    dashboardText += "╠════════════════════════════════════╣\n";
    dashboardText += "║ SIGNAL SETTINGS\n";
    dashboardText += "║ Open Threshold: " + IntegerToString(Signal_ThresholdOpen) + "%\n";
@@ -151,6 +220,10 @@ void DrawDashboard() {
    dashboardText += "Bears: " + DoubleToString(Signal_BearsPower_Weight, 2) + "\n";
    dashboardText += "║ Stoch: " + DoubleToString(Signal_Stoch_Weight, 2) + "\n";
    dashboardText += "╠════════════════════════════════════╣\n";
+   dashboardText += "║ SIGNAL ANALYSIS\n";
+   dashboardText += "║ Current Signal: " + DoubleToString(lastSignalStrength, 2) + "\n";
+   dashboardText += "║ Signal Type: " + (lastSignalDirection == 1 ? "BUY" : lastSignalDirection == -1 ? "SELL" : "NONE") + "\n";
+   dashboardText += "╠════════════════════════════════════╣\n";
    dashboardText += "║ TRADING STATISTICS\n";
    dashboardText += "║ Total Trades: " + IntegerToString(totalTrades) + "\n";
    dashboardText += "║ Winning: " + IntegerToString(winningTrades) + " | ";
@@ -161,7 +234,7 @@ void DrawDashboard() {
    dashboardText += "║ Total P&L: " + DoubleToString(totalProfit, 2) + " $\n";
    dashboardText += "╠════════════════════════════════════╣\n";
    dashboardText += "║ Trade Comment: " + TRADE_COMMENT + "\n";
-   dashboardText += "║ STATUS: " + (PositionsTotal() > 0 ? "IN TRADE" : "WAITING") + "\n";
+   dashboardText += "║ STATUS: " + (PositionsTotal() > 0 ? "IN TRADE (" + IntegerToString(PositionsTotal()) + ")" : "WAITING") + "\n";
    dashboardText += "╚════════════════════════════════════╝\n";
    
    // Draw the dashboard using Comment function
@@ -171,6 +244,11 @@ void DrawDashboard() {
 //| Initialization function of the expert                            |
 //+------------------------------------------------------------------+
 int OnInit() {
+//--- Initialize trade object
+   trade.SetExpertMagicNumber(Expert_MagicNumber);
+   trade.SetTypeFillingBySymbol(Symbol());
+   trade.SetDeviationInPoints(10);
+   
 //--- Initializing expert
    if(!ExtExpert.Init(Symbol(),Period(),Expert_EveryTick,Expert_MagicNumber)) {
       //--- failed
@@ -311,7 +389,13 @@ int OnInit() {
       return(INIT_FAILED);
    }
 //--- Print initialization info
-   printf("ZEUS SCALPER Ai initialized - Trade Comment: %s", GetTradeComment());
+   printf("═══════════════════════════════════════");
+   printf("✓ ZEUS SCALPER Ai v1.04 INITIALIZED");
+   printf("  Trade Comment: %s", GetTradeComment());
+   printf("  Magic Number: %d", Expert_MagicNumber);
+   printf("  Lot Size: %.2f", Money_FixLot_Lots);
+   printf("  Open Threshold: %d%%", Signal_ThresholdOpen);
+   printf("═══════════════════════════════════════");
    
 //--- ok
    return(INIT_SUCCEEDED);
@@ -322,14 +406,16 @@ int OnInit() {
 void OnDeinit(const int reason) {
    ExtExpert.Deinit();
    Comment("");
-   printf("ZEUS SCALPER Ai deinitialized");
+   printf("✗ ZEUS SCALPER Ai deinitialized | Reason: %d", reason);
 }
 //+------------------------------------------------------------------+
 //| "Tick" event handler function                                    |
 //+------------------------------------------------------------------+
 void OnTick() {
    ExtExpert.OnTick();
+   CheckAndExecuteTrades();  // NEW: Execute trades on signal
    DrawDashboard();
+   LogSignalStrength();      // NEW: Log signal for debugging
 }
 //+------------------------------------------------------------------+
 //| "Trade" event handler function                                    |
