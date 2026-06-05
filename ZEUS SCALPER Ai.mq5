@@ -19,6 +19,8 @@
 #include <Expert\Trailing\TrailingNone.mqh>
 //--- available money management
 #include <Expert\Money\MoneyFixedLot.mqh>
+//--- Trade class
+#include <Trade\Trade.mqh>
 //+------------------------------------------------------------------+
 //| Inputs                                                           |
 //+------------------------------------------------------------------+
@@ -86,21 +88,32 @@ string GetTradeComment() {
 //| Function to update trading statistics                            |
 //+------------------------------------------------------------------+
 void UpdateTradingStats() {
-   int ordersTotal = OrdersTotal();
-   int positionsTotal = PositionsTotal();
-   
    totalTrades = 0;
    winningTrades = 0;
    totalProfit = 0.0;
    
-   for(int i = OrdersHistoryTotal() - 1; i >= 0; i--) {
-      if(OrderGetTicket(i) > 0) {
-         if(OrderGetInteger(ORDER_MAGIC) == Expert_MagicNumber) {
-            if(OrderGetInteger(ORDER_STATE) == ORDER_STATE_FILLED) {
+   // Count positions and trades from history
+   int deals = HistoryDealsTotal();
+   
+   for(int i = 0; i < deals; i++) {
+      ulong ticket = HistoryDealGetTicket(i);
+      
+      if(ticket > 0) {
+         // Check if deal belongs to this EA
+         ulong magic = HistoryDealGetInteger(ticket, DEAL_MAGIC);
+         
+         if(magic == Expert_MagicNumber) {
+            ENUM_DEAL_TYPE dealType = (ENUM_DEAL_TYPE)HistoryDealGetInteger(ticket, DEAL_TYPE);
+            
+            // Count completed deals
+            if(dealType == DEAL_TYPE_BUY || dealType == DEAL_TYPE_SELL) {
                totalTrades++;
-               double profit = OrderGetDouble(ORDER_PROFIT);
+               double profit = HistoryDealGetDouble(ticket, DEAL_PROFIT);
                totalProfit += profit;
-               if(profit > 0) winningTrades++;
+               
+               if(profit > 0) {
+                  winningTrades++;
+               }
             }
          }
       }
